@@ -165,7 +165,8 @@ function calculatePricing(form: FormState): PricingResult {
   );
 
   const useMoq = useMoqAllocation && orderQty > 0 && moqCapacity > 0 && orderQty < moqCapacity;
-  const finalApplicableCost = useMoq ? smallOrderAllocatedUnitCost : normalCost;
+  // 小单触发 MOQ 时，当前订单的最终适用成本按 MOQ 总成本平摊到实际订单数量。
+  const finalApplicableCost = useMoq ? moqTotalCost / orderQty : normalCost;
   const breakEvenPrice = finalApplicableCost;
   const minAcceptablePrice = finalApplicableCost + minUnitProfit;
   const recommendedPrice = finalApplicableCost / (1 - targetGrossMargin);
@@ -419,9 +420,9 @@ export default function Page() {
                 { label: "最终适用成本", value: calc.finalApplicableCost, strong: true },
                 { label: "保本价", value: calc.breakEvenPrice },
                 { label: "最低可接价", value: calc.minAcceptablePrice },
-                { label: "推荐报价", value: calc.recommendedPrice, strong: true },
-                { label: "推荐报价（按净重）", value: calc.recommendedPriceByNetWeight, strong: true },
-                { label: "推荐报价（按毛重）", value: calc.recommendedPriceByGrossWeight, strong: true },
+                { label: "推荐报价（当前订单）", value: calc.recommendedPrice, strong: true },
+                { label: "推荐报价（按净重，正常量产参考）", value: calc.recommendedPriceByNetWeight, strong: true },
+                { label: "推荐报价（按毛重，正常量产保守参考）", value: calc.recommendedPriceByGrossWeight, strong: true },
                 { label: "注塑件PO价差", value: calc.unitGap },
                 { label: "总价差金额", value: calc.totalGap },
                 { label: "接单建议", value: calc.advice, strong: true },
