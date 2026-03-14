@@ -35,6 +35,12 @@ type FormState = {
 };
 
 type PricingResult = {
+  recommendedPriceByNetWeight: number;
+  recommendedPriceByGrossWeight: number;
+  normalCostByNetWeight: number;
+  normalCostByGrossWeight: number;
+  moqTotalCost: number;
+  smallOrderAllocatedUnitCost: number;
   targetPoUnitPrice: number;
   hourlyCapacity: number;
   dailyCapacity: number;
@@ -111,6 +117,10 @@ function calculatePricing(form: FormState): PricingResult {
     ? 0
     : (netWeight * (materialPrice + modifiedPrice) / 1000) * qualityLossRate * specialLossRate;
 
+  const materialCostByGrossWeight = customerSuppliedMaterial
+    ? 0
+    : (grossWeight * (materialPrice + modifiedPrice) / 1000) * qualityLossRate * specialLossRate;
+
   const subtotal =
     processingCost +
     materialCost +
@@ -121,9 +131,21 @@ function calculatePricing(form: FormState): PricingResult {
     glueCost +
     packagingCost;
 
+  const subtotalByGrossWeight =
+    processingCost +
+    materialCostByGrossWeight +
+    hardwareCost +
+    sprayCost +
+    printCost +
+    laserCost +
+    glueCost +
+    packagingCost;
+
   const taxBase = processingCost + laserCost + businessFee;
   const tax = taxBase * taxRate;
   const normalCost = subtotal + tax;
+  const normalCostByNetWeight = normalCost;
+  const normalCostByGrossWeight = subtotalByGrossWeight + tax;
 
   const moqCapacity = grossWeight > 0 ? (effectiveMoqKg * 1000) / grossWeight : 0;
   const moqMaterialCost = customerSuppliedMaterial
@@ -132,6 +154,10 @@ function calculatePricing(form: FormState): PricingResult {
       ? ((materialPrice + modifiedPrice) * moqPurchaseKg / moqCapacity) * qualityLossRate * specialLossRate
       : 0;
   const moqUnitCost = processingCost + moqMaterialCost;
+  const moqTaxPerUnit = (processingCost + laserCost + businessFee) * taxRate;
+  const moqFullUnitCost = moqUnitCost + moqTaxPerUnit;
+  const moqTotalCost = moqFullUnitCost * moqCapacity;
+  const smallOrderAllocatedUnitCost = orderQty > 0 ? moqTotalCost / orderQty : moqFullUnitCost;
 
   const targetPoUnitPrice = Math.max(
     customerTargetPrice - businessFee - hardwareCost - sprayCost - printCost - laserCost - glueCost - packagingCost,
@@ -139,10 +165,12 @@ function calculatePricing(form: FormState): PricingResult {
   );
 
   const useMoq = useMoqAllocation && orderQty > 0 && moqCapacity > 0 && orderQty < moqCapacity;
-  const finalApplicableCost = useMoq ? moqUnitCost : normalCost;
+  const finalApplicableCost = useMoq ? smallOrderAllocatedUnitCost : normalCost;
   const breakEvenPrice = finalApplicableCost;
   const minAcceptablePrice = finalApplicableCost + minUnitProfit;
   const recommendedPrice = finalApplicableCost / (1 - targetGrossMargin);
+  const recommendedPriceByNetWeight = normalCostByNetWeight / (1 - targetGrossMargin);
+  const recommendedPriceByGrossWeight = normalCostByGrossWeight / (1 - targetGrossMargin);
   const unitGap = targetPoUnitPrice > 0 ? targetPoUnitPrice - finalApplicableCost : 0;
   const totalGap = unitGap * orderQty;
 
@@ -154,6 +182,12 @@ function calculatePricing(form: FormState): PricingResult {
   }
 
   return {
+    recommendedPriceByNetWeight,
+    recommendedPriceByGrossWeight,
+    normalCostByNetWeight,
+    normalCostByGrossWeight,
+    moqTotalCost,
+    smallOrderAllocatedUnitCost,
     targetPoUnitPrice,
     hourlyCapacity,
     dailyCapacity,
@@ -358,9 +392,10 @@ export default function Page() {
                 { label: "每小时产能(PCS)", value: calc.hourlyCapacity },
                 { label: "日产能(PCS)", value: calc.dailyCapacity },
                 { label: "加工费/件", value: calc.processingCost },
-                { label: "材料费/件", value: calc.materialCost },
+                { label: "材料费/件(按净重)", value: calc.materialCost },
                 { label: "税金", value: calc.tax },
-                { label: "正常核算单价", value: calc.normalCost, strong: true },
+                { label: "核算单价（按净重）", value: calc.normalCostByNetWeight, strong: true },
+                { label: "核算单价（按毛重）", value: calc.normalCostByGrossWeight, strong: true },
               ]}
             />
 
@@ -370,7 +405,9 @@ export default function Page() {
                 { label: "有效生产料重(kg)", value: calc.effectiveMoqKg },
                 { label: "MOQ产能(PCS)", value: calc.moqCapacity },
                 { label: "MOQ材料单价", value: calc.moqMaterialCost },
-                { label: "MOQ单价", value: calc.moqUnitCost, strong: true },
+                { label: "MOQ基础单价(未平摊税金)", value: calc.moqUnitCost },
+                { label: "MOQ总成本(含加工费+税金)", value: calc.moqTotalCost, strong: true },
+                { label: "小单平摊单价", value: calc.smallOrderAllocatedUnitCost, strong: true },
                 { label: "是否触发MOQ", value: calc.useMoq ? "是" : "否" },
               ]}
             />
@@ -383,6 +420,8 @@ export default function Page() {
                 { label: "保本价", value: calc.breakEvenPrice },
                 { label: "最低可接价", value: calc.minAcceptablePrice },
                 { label: "推荐报价", value: calc.recommendedPrice, strong: true },
+                { label: "推荐报价（按净重）", value: calc.recommendedPriceByNetWeight, strong: true },
+                { label: "推荐报价（按毛重）", value: calc.recommendedPriceByGrossWeight, strong: true },
                 { label: "注塑件PO价差", value: calc.unitGap },
                 { label: "总价差金额", value: calc.totalGap },
                 { label: "接单建议", value: calc.advice, strong: true },
